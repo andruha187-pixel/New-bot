@@ -16,7 +16,7 @@ def fetch_cache():
         print(f"Ошибка при скачивании кэша: {e}")
         return ""
 
-def get_metar(station="UUWW"):
+get_metar(station="UUWW"):
     data = fetch_cache()
     for line in data.splitlines():
         if station in line:
