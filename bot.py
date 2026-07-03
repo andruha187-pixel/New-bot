@@ -12,13 +12,12 @@ from telegram.ext import (
 from metar import get_metar, extract_temp
 import state
 
-# Включаем логирование, чтобы видеть отчеты в консоли Render
+# Включаем логирование
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
     level=logging.INFO
 )
 
-# Токен вашего бота
 TOKEN = "8340766070:AAE2YKqhfhhegdZ4Kjm2zMk0UTg98DNtDd4"
 STATION = "UUWW"
 
@@ -32,7 +31,6 @@ def keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
-    # Безопасно сохраняем ID чата во встроенную базу данных бота
     if "chat_ids" not in context.application.bot_data:
         context.application.bot_data["chat_ids"] = set()
     context.application.bot_data["chat_ids"].add(chat_id)
@@ -62,7 +60,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboard()
         )
 
-# Фоновая задача планировщика (вызывается каждые 12 секунд)
 async def poller_job(context: ContextTypes.DEFAULT_TYPE):
     app = context.application
     if state.tracking:
@@ -70,11 +67,9 @@ async def poller_job(context: ContextTypes.DEFAULT_TYPE):
         if metar:
             temp = extract_temp(metar)
             
-            # Срабатывает только если температура изменилась
             if temp is not None and temp != state.last_temp:
                 state.last_temp = temp
                 
-                # Берем список всех подписчиков
                 chat_ids = app.bot_data.get("chat_ids", set())
                 for chat_id in chat_ids:
                     try:
@@ -85,19 +80,29 @@ async def poller_job(context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         logging.error(f"Ошибка отправки в чат {chat_id}: {e}")
 
-def main():
-    # Собираем приложение бота
+async def main_async():
+    # Инициализируем приложение внутри асинхронного контекста
     app = Application.builder().token(TOKEN).build()
 
-    # Регистрируем команды и кнопки
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
 
-    # Запускаем фоновую задачу через встроенный JobQueue
     app.job_queue.run_repeating(poller_job, interval=12, first=5)
 
-    print("Бот успешно запущен в режиме JobQueue...")
-    app.run_polling()
+    # Правильный асинхронный запуск без run_polling()
+    async with app:
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
+        print("Бот успешно запущен в асинхронном режиме...")
+        
+        # Держим бота запущенным бесконечно
+        while True:
+            await asyncio.sleep(3600)
+
+def main():
+    # Используем современный asyncio.run для управления циклом событий
+    asyncio.run(main_async())
 
 if __name__ == "__main__":
     main()
